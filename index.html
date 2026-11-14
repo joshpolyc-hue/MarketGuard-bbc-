@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>MarketGuard - Market Dues Leakage Detector</title>
+<link rel="icon" href="favicon.png" type="image/png">
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+--bg:#f3f7f5;--card:#fff;--ink:#16231d;--mute:#5d6d65;--brand:#0b6b4b;--on:#fff;--soft:#e9f5ef;--warn:#c2410c;--warnbg:#fdeee4;--ok:#15803d;--line:#d9e4de}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0e1713;--card:#15221c;--ink:#e6f0ea;--mute:#9db1a7;--brand:#3ec28f;--on:#06221a;--soft:#173126;--warn:#fb923c;--warnbg:#2c1d12;--ok:#4ade80;--line:#264034}}
+:root[data-theme="dark"]{--bg:#0e1713;--card:#15221c;--ink:#e6f0ea;--mute:#9db1a7;--brand:#3ec28f;--on:#06221a;--soft:#173126;--warn:#fb923c;--warnbg:#2c1d12;--ok:#4ade80;--line:#264034}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 'Segoe UI',system-ui,Arial,sans-serif}
+header{background:var(--brand);color:var(--on);padding:16px 3vw;display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between}
+header h1{margin:0;font-size:22px}header small{opacity:.9;display:block}
+nav{display:flex;gap:6px;flex-wrap:wrap}
+nav button{background:transparent;color:var(--on);border:1px solid currentColor;border-radius:8px;padding:7px 14px;cursor:pointer;font:inherit;opacity:.8}
+nav button.on{background:var(--on);color:var(--brand);opacity:1;font-weight:600}
+main{padding:20px 3vw 40px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:16px}
+.g{display:grid;gap:14px}.kp{grid-template-columns:repeat(auto-fit,minmax(190px,1fr))}
+.two{grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr))}
+.k small{color:var(--mute)}.k b{display:block;font-size:22px}.bad b{color:var(--warn)}.good b{color:var(--ok)}
+h2{font-size:17px;margin:0 0 10px}
+.sc{overflow-x:auto}table{width:100%;border-collapse:collapse;min-width:480px}
+th,td{padding:8px;text-align:left;border-bottom:1px solid var(--line);font-size:14px}th{color:var(--mute)}
+input,select,button.a{font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink)}
+button.a{background:var(--brand);color:var(--on);border:0;cursor:pointer;font-weight:600}button.a.s{background:var(--soft);color:var(--ink)}
+.f{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;align-items:end}.f label{font-size:12px;color:var(--mute);display:block}
+.p{padding:2px 10px;border-radius:99px;font-size:12px;font-weight:600}.hi{background:var(--warnbg);color:var(--warn)}.lo{background:var(--soft);color:var(--ok)}
+.msg{color:var(--mute);font-size:13px}
+
+:root{--ov:rgba(243,247,245,.80)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--ov:rgba(14,23,19,.82)}}
+:root[data-theme="dark"]{--ov:rgba(14,23,19,.82)}
+body{background:linear-gradient(var(--ov),var(--ov)),url(assets/background.jpg) center/cover fixed no-repeat,var(--bg)}
+header{background:linear-gradient(rgba(6,34,26,.45),rgba(6,34,26,.72)),url(assets/header.jpg) center 9%/cover no-repeat;color:#fff;padding:38px 3vw 20px;min-height:150px;align-items:flex-end}
+header h1{font-size:28px;text-shadow:0 2px 6px rgba(0,0,0,.5)}header small{text-shadow:0 1px 4px rgba(0,0,0,.5)}
+header nav button{color:#fff;background:rgba(0,0,0,.25)}
+header nav button.on{background:#fff;color:#0b6b4b}
+</style></head><body>
+<header><div><h1>MarketGuard</h1><small>Market dues leakage detector for local government</small></div>
+<nav id="nav"></nav></header>
+<main id="v"></main>
+<script>
+const KEY="marketguard_v1",TABS=["Dashboard","Vendors","Collectors","Payments","Banking","Settings"];
+let S={markets:[],vendors:[],pays:[],bank:[]},tab="Dashboard",sel="all",mon=new Date().toISOString().slice(0,7),thr=90;
+try{const r=localStorage.getItem(KEY);if(r)S=JSON.parse(r)}catch(e){}
+S.collectors=S.collectors||[];
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}};
+const $=s=>document.querySelector(s),uid=()=>Math.random().toString(36).slice(2,9);
+const E=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const U=n=>"UGX "+Math.round(n).toLocaleString("en-US");
+const mk=id=>S.markets.find(m=>m.id==id)||{name:"?",rate:0},vd=id=>S.vendors.find(v=>v.id==id)||{name:"?"};
+const inM=d=>(d||"").startsWith(mon);
+function stats(){
+const P=S.pays.filter(p=>inM(p.date)),B=S.bank.filter(b=>inM(b.date));
+const mkts=S.markets.map(m=>{const vs=S.vendors.filter(v=>v.market==m.id),mx0=(S.expM||{})[mon],exp=(S.markets.length==1&&mx0>0)?mx0:vs.length*m.rate*26,
+rec=P.filter(p=>vd(p.vendor).market==m.id).reduce((a,p)=>a+p.amt,0);return{m,n:vs.length,exp,rec}});
+const cols={};P.forEach(p=>{(cols[p.col]=cols[p.col]||{rec:0,bank:0}).rec+=p.amt});
+B.forEach(b=>{(cols[b.col]=cols[b.col]||{rec:0,bank:0}).bank+=b.amt});
+const exp=mkts.reduce((a,x)=>a+x.exp,0),rec=P.reduce((a,p)=>a+p.amt,0),bank=B.reduce((a,b)=>a+b.amt,0);
+const arrears=S.vendors.map(v=>{const m=mk(v.market),paid=P.filter(p=>p.vendor==v.id).reduce((a,p)=>a+p.amt,0);
+return{v,m,owed:Math.max(0,m.rate*26-paid)}}).filter(x=>x.owed>0).sort((a,b)=>b.owed-a.owed);
+return{mkts,cols,exp,rec,bank,arrears,unpaid:Math.max(0,exp-rec),bgap:Math.max(0,rec-bank)};}
+const ctl=()=>`<div class="f"><div ${S.markets.length>1?'':'style="display:none"'}><label>View</label><select onchange="sel=this.value;draw()"><option value="all">All markets (compare)</option>${S.markets.map(m=>`<option value="${m.id}"${m.id==sel?' selected':''}>${E(m.name)} only</option>`).join("")}</select></div><div><label>Month</label><input type="month" value="${mon}" onchange="mon=this.value;draw()"></div><div><label>Alert below (%)</label><input type="number" min="50" max="100" value="${thr}" style="width:90px" onchange="thr=+this.value;draw()"></div>${S.markets.length==1?`<div><label>Expected amount for ${mon} (UGX)</label><input type="number" value="${(S.expM||{})[mon]||''}" placeholder="auto: ${U(S.vendors.length*S.markets[0].rate*26)}" style="width:210px" onchange="setExp(this.value)"></div>`:''}</div>`;
+const cmp=s=>{const r=s.mkts.map(x=>({x,p:x.exp?x.rec/x.exp*100:0,l:Math.max(0,x.exp-x.rec)})).sort((a,b)=>b.p-a.p);
+return`<div class="card"><h2>Compare all markets (best to weakest collection rate)</h2><div class="sc"><table><tr><th>#</th><th>Market</th><th>Collection rate</th><th>Unpaid dues</th><th>Status</th></tr>${r.map((o,i)=>`<tr><td>${i+1}</td><td><a href="#" onclick="sel='${o.x.m.id}';draw();return false" style="color:var(--brand)">${E(o.x.m.name)}</a></td><td style="min-width:200px"><div style="background:var(--soft);border-radius:6px;height:12px"><div style="width:${Math.min(o.p,100)}%;height:12px;border-radius:6px;background:${o.p<thr?'var(--warn)':'var(--brand)'}"></div></div>${o.p.toFixed(0)}%</td><td>${U(o.l)}</td><td><span class="p ${o.p<thr?'hi':'lo'}">${o.p<thr?'Investigate':'On track'}</span></td></tr>`).join("")}</table></div><p class="msg">Best: <b>${E(r[0].x.m.name)}</b>. Weakest: <b>${E(r[r.length-1].x.m.name)}</b>. Click a market name to see how money is collected there.</p></div>`};
+const bar=(items,o={})=>{const W=640,H=300,L=62,R=12,T=24,B=44,pw=W-L-R,ph=H-T-B;
+let mx=Math.max(1,...items.map(i=>i.v),o.line||0)*1.1;
+const raw=mx/4,pz=Math.pow(10,Math.floor(Math.log10(raw))),mm=raw/pz,step=(mm<=1?1:mm<=2?2:mm<=5?5:10)*pz;
+mx=Math.ceil(mx/step)*step;
+const y=v=>T+ph-v/mx*ph,bw=pw/items.length,w=Math.min(64,bw*.62),fm=v=>v>=1e6?(v/1e6).toFixed(v%1e6?1:0)+'M':v>=1e3?Math.round(v/1e3)+'K':Math.round(v);
+let g='';for(let t=0;t<=mx+1;t+=step)g+=`<line x1="${L}" x2="${W-R}" y1="${y(t)}" y2="${y(t)}" stroke="var(--line)"/><text x="${L-6}" y="${y(t)+4}" text-anchor="end" font-size="11" fill="var(--mute)">${fm(t)}</text>`;
+items.forEach((it,i)=>{const cx=L+bw*i+bw/2;g+=`<rect x="${cx-w/2}" y="${y(it.v)}" width="${w}" height="${Math.max(0,T+ph-y(it.v))}" rx="3" fill="${it.c}"/>`+(items.length<=8?`<text x="${cx}" y="${y(it.v)-5}" text-anchor="middle" font-size="11" font-weight="600" fill="var(--ink)">${fm(it.v)}</text>`:'')+`<text x="${cx}" y="${H-B+16}" text-anchor="middle" font-size="${items.length>8?9:11}" fill="var(--mute)">${it.l}</text>`});
+if(o.line)g+=`<line x1="${L}" x2="${W-R}" y1="${y(o.line)}" y2="${y(o.line)}" stroke="var(--warn)" stroke-width="2" stroke-dasharray="6 4"/><text x="${W-R}" y="${y(o.line)-5}" text-anchor="end" font-size="11" fill="var(--warn)">${o.ll}</text>`;
+return`<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-height:340px"><text x="12" y="14" font-size="11" fill="var(--mute)">UGX</text>${g}<line x1="${L}" x2="${L}" y1="${T}" y2="${T+ph}" stroke="var(--mute)"/><line x1="${L}" x2="${W-R}" y1="${T+ph}" y2="${T+ph}" stroke="var(--mute)"/></svg>`};
+const gap=(e,r,b)=>{const pc=v=>e?Math.min(100,Math.max(0,v/e*100)):0,row=(lab,v,col)=>`<div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:8px 0"><div style="width:140px;font-size:13px">${lab}</div><div style="flex:1;min-width:140px;background:var(--soft);border-radius:6px;height:26px"><div style="width:${pc(v)}%;height:26px;border-radius:6px;background:${col}"></div></div><div style="width:200px;font-size:13px"><b>${U(v)}</b> (${pc(v).toFixed(0)}%)</div></div>`;
+const u=Math.max(0,e-r),n=Math.max(0,r-b);
+return`<div class="card"><h2>Where the money is lost: why the current system does not work</h2>${bar([{l:'Expected',v:e,c:'var(--brand)'},{l:'Receipted',v:r,c:'#d99a1f'},{l:'Banked',v:b,c:'#2f7fd1'},{l:'Unpaid',v:u,c:'var(--warn)'},{l:'Not banked',v:n,c:'#a21caf'}])}
+<p class="msg"><b style="color:var(--warn)">${U(u+n)} (${e?((u+n)/e*100).toFixed(0):0}%) never reaches the council:</b> ${U(u)} unpaid by vendors and ${U(n)} collected but not banked. With no system comparing these three bars, nobody sees the gap.</p></div>`};
+function dashOne(s){const x=s.mkts.find(q=>q.m.id==sel),m=x.m,P=S.pays.filter(p=>inM(p.date)&&vd(p.vendor).market==sel),byC={},byM={},byD={};
+P.forEach(p=>{byC[p.col]=(byC[p.col]||0)+p.amt;byM[p.met]=(byM[p.met]||0)+p.amt;byD[p.date]=(byD[p.date]||0)+p.amt});
+let bk=0;Object.keys(byC).forEach(c=>{const t=s.cols[c];if(t&&t.rec)bk+=t.bank*byC[c]/t.rec});
+const rec=x.rec,rate=x.exp?rec/x.exp*100:0,ar=s.arrears.filter(a=>a.v.market==sel),mx=Math.max(1,...Object.values(byD)),days=Object.keys(byD).sort(),sh=v=>rec?(v/rec*100).toFixed(0)+'%':'0%';
+return`${ctl()}<div class="card"><h2>${E(m.name)}: how money is collected</h2>
+<p class="msg"><b>Step 1.</b> The market is expected to collect <b>${U(x.exp)}</b> this month (${x.n} vendors registered). <b>Step 2.</b> Collectors receipted <b>${U(rec)}</b> (${rate.toFixed(0)}%). <b>Step 3.</b> The bank received about <b>${U(bk)}</b> from these receipts.</p></div>
+<div class="g kp"><div class="card k"><small>Vendors</small><b>${x.n}</b></div><div class="card k"><small>Expected dues</small><b>${U(x.exp)}</b></div>
+<div class="card k good"><small>Collected (${rate.toFixed(0)}%)</small><b>${U(rec)}</b></div><div class="card k bad"><small>Unpaid by vendors</small><b>${U(Math.max(0,x.exp-rec))}</b></div>
+<div class="card k good"><small>Banked (estimate)</small><b>${U(bk)}</b></div><div class="card k bad"><small>Not banked (estimate)</small><b>${U(Math.max(0,rec-bk))}</b></div></div>
+${gap(x.exp,rec,bk)}<div class="g two"><div class="card"><h2>Who collected the money</h2><div class="sc"><table><tr><th>Collector</th><th>Target</th><th>Collected</th><th>% of target</th><th>Banked (est.)</th><th>Status</th></tr>
+${Object.entries(byC).sort((a,b)=>b[1]-a[1]).map(([c,v])=>{const t=s.cols[c],b=t&&t.rec?t.bank*v/t.rec:0,r=v?b/v*100:100,tg=((S.collectors||[]).find(q=>q.name==c)||{}).exp||0;return`<tr><td>${E(c)}</td><td>${tg?U(tg):'-'}</td><td>${U(v)}</td><td>${tg?`<span class="p ${v/tg*100<thr?'hi':'lo'}">${(v/tg*100).toFixed(0)}%</span>`:sh(v)}</td><td>${U(b)}</td><td><span class="p ${r<thr?'hi':'lo'}">${r<thr?'Investigate':'OK'}</span></td></tr>`}).join("")||"<tr><td colspan=6>No receipts this month</td></tr>"}</table></div></div>
+<div class="card"><h2>How vendors paid</h2><div class="sc"><table><tr><th>Method</th><th>Amount</th><th>Share</th></tr>${Object.entries(byM).map(([k,v])=>`<tr><td>${E(k)}</td><td>${U(v)}</td><td>${sh(v)}</td></tr>`).join("")||"<tr><td colspan=3>No receipts</td></tr>"}</table></div>
+<p class="msg">${x.n-ar.length} of ${x.n} vendors are fully paid up for the month.</p></div></div>
+<div class="g two"><div class="card"><h2>Daily collections</h2>${days.length?bar(days.map(d=>({l:+d.slice(8),v:byD[d],c:'var(--brand)'})),{line:x.exp/26,ll:'Daily target'}):''}
+<p class="msg">${days.length?days[0]+' to '+days[days.length-1]+'. The dashed line is the daily target (expected / 26).':'No receipts this month.'}</p></div>
+<div class="card"><h2>Vendors who owe most</h2><div class="sc"><table><tr><th>Vendor</th><th>Stall</th><th>Owed</th></tr>${ar.slice(0,8).map(a=>`<tr><td>${E(a.v.name)}</td><td>${E(a.v.stall)}</td><td>${U(a.owed)}</td></tr>`).join("")||"<tr><td colspan=3>No arrears</td></tr>"}</table></div></div></div>`}
+function dash(){const s=stats();
+if(S.markets.length==1)sel=S.markets[0].id;
+if(S.markets.length&&sel!="all"&&S.markets.some(m=>m.id==sel))return dashOne(s);
+if(!S.markets.length)return`<div class="card"><h2>Welcome</h2><p>No data yet. Add markets and vendors, record payments and banking, or load sample data in <b>Settings</b> to see how leakage is detected.</p><button class="a" onclick="seed()">Load sample data</button></div>`;
+const leak=s.unpaid+s.bgap;
+return`${ctl()}
+<div class="g kp"><div class="card k"><small>Expected dues</small><b>${U(s.exp)}</b></div>
+<div class="card k"><small>Receipted (collected)</small><b>${U(s.rec)}</b></div>
+<div class="card k good"><small>Banked</small><b>${U(s.bank)}</b></div>
+<div class="card k bad"><small>Unpaid by vendors</small><b>${U(s.unpaid)}</b></div>
+<div class="card k bad"><small>Collected but not banked</small><b>${U(s.bgap)}</b></div>
+<div class="card k bad"><small>Total leakage</small><b>${U(leak)} (${s.exp?(leak/s.exp*100).toFixed(0):0}%)</b></div></div>
+${cmp(s)}<div class="g two"><div class="card"><h2>Markets</h2><div class="sc"><table><tr><th>Market</th><th>Vendors</th><th>Expected</th><th>Collected</th><th>Rate</th></tr>
+${s.mkts.map(x=>{const r=x.exp?x.rec/x.exp*100:0;return`<tr><td>${E(x.m.name)}</td><td>${x.n}</td><td>${U(x.exp)}</td><td>${U(x.rec)}</td><td><span class="p ${r<thr?'hi':'lo'}">${r.toFixed(0)}%</span></td></tr>`}).join("")}</table></div></div>
+<div class="card"><h2>Collectors: receipted vs banked</h2><div class="sc"><table><tr><th>Collector</th><th>Receipted</th><th>Banked</th><th>Missing</th><th>Status</th></tr>
+${Object.entries(s.cols).map(([c,x])=>{const r=x.rec?x.bank/x.rec*100:100;return`<tr><td>${E(c)}</td><td>${U(x.rec)}</td><td>${U(x.bank)}</td><td>${U(Math.max(0,x.rec-x.bank))}</td><td><span class="p ${r<thr?'hi':'lo'}">${r<thr?'Investigate':'OK'}</span></td></tr>`}).join("")||"<tr><td colspan=5>No data for this month</td></tr>"}</table></div></div></div>
+<div class="card"><h2>Vendors with highest arrears (follow up first)</h2><div class="sc"><table><tr><th>Vendor</th><th>Stall</th><th>Market</th><th>Owed this month</th></tr>
+${s.arrears.slice(0,8).map(a=>`<tr><td>${E(a.v.name)}</td><td>${E(a.v.stall)}</td><td>${E(a.m.name)}</td><td>${U(a.owed)}</td></tr>`).join("")||"<tr><td colspan=4>No arrears. Excellent.</td></tr>"}</table></div>
+<p class="msg">If the detector helps recover 60% of the leakage, the council gains about <b>${U(leak*12*.6)}</b> a year for market services.</p></div>`}
+function vendors(){return`<div class="g two"><div class="card"><h2>${S.markets.length?'Your market':'Set up your market'}</h2><div class="f" ${S.markets.length?'style="display:none"':''}><div><label>Market name</label><input id="mn"></div><div><label>Daily rate per vendor (UGX)</label><input id="mr" type="number" value="1000"></div><div><label>Expected amount for ${mon} (UGX, optional)</label><input id="me" type="number" style="width:210px"></div><button class="a" onclick="addM()">Save market</button></div>
+<div class="sc"><table><tr><th>Market</th><th>Daily rate</th></tr>${S.markets.map(m=>`<tr><td>${E(m.name)}</td><td>${U(m.rate)}</td></tr>`).join("")}</table></div></div>
+<div class="card"><h2>Register vendor</h2><div class="f"><div><label>Name</label><input id="vn"></div><div><label>Stall no.</label><input id="vs" style="width:90px"></div><div><label>Market</label><select id="vm">${S.markets.map(m=>`<option value="${m.id}">${E(m.name)}</option>`).join("")}</select></div><button class="a" onclick="addV()">Register</button></div>
+<p class="msg">${S.vendors.length} vendors registered.</p></div></div>
+<div class="card sc"><table><tr><th>Vendor</th><th>Stall</th><th>Market</th></tr>${S.vendors.slice(-30).reverse().map(v=>`<tr><td>${E(v.name)}</td><td>${E(v.stall)}</td><td>${E(mk(v.market).name)}</td></tr>`).join("")}</table></div>`}
+function pays(){const t=new Date().toISOString().slice(0,10);return`<div class="card"><h2>Record a payment (receipt)</h2><div class="f">
+<div><label>Vendor</label><select id="pv">${S.vendors.map(v=>`<option value="${v.id}">${E(v.name)} (${E(v.stall)})</option>`).join("")}</select></div>
+<div><label>Date</label><input id="pd" type="date" value="${t}"></div><div><label>Amount (UGX)</label><input id="pa" type="number" value="1000" style="width:110px"></div>
+<div><label>Collector</label><input id="pc" list="cl" style="width:140px"><datalist id="cl">${(S.collectors||[]).map(c=>`<option value="${E(c.name)}">`).join("")}</datalist></div><div><label>Method</label><select id="pm"><option>Cash</option><option>Mobile money</option></select></div><button class="a" onclick="addP()">Save</button></div></div>
+<div class="card sc"><h2>Latest receipts</h2><table><tr><th>Date</th><th>Vendor</th><th>Amount</th><th>Collector</th><th>Method</th></tr>${S.pays.slice(-25).reverse().map(p=>`<tr><td>${p.date}</td><td>${E(vd(p.vendor).name)}</td><td>${U(p.amt)}</td><td>${E(p.col)}</td><td>${E(p.met)}</td></tr>`).join("")}</table></div>`}
+function bank(){const t=new Date().toISOString().slice(0,10);return`<div class="card"><h2>Record a bank deposit</h2><div class="f">
+<div><label>Collector</label><input id="bc" list="cl" style="width:140px"><datalist id="cl">${(S.collectors||[]).map(c=>`<option value="${E(c.name)}">`).join("")}</datalist></div><div><label>Date</label><input id="bd" type="date" value="${t}"></div><div><label>Amount banked (UGX)</label><input id="ba" type="number" style="width:140px"></div><button class="a" onclick="addB()">Save</button></div>
+<p class="msg">Use the same collector name as on the receipts so the system can compare them.</p></div>
+<div class="card sc"><table><tr><th>Date</th><th>Collector</th><th>Banked</th></tr>${S.bank.slice(-25).reverse().map(b=>`<tr><td>${b.date}</td><td>${E(b.col)}</td><td>${U(b.amt)}</td></tr>`).join("")}</table></div>`}
+function sett(){return`<div class="card"><h2>Settings</h2><button class="a" onclick="seed()">Load sample data</button> ${clr?`<b>Delete everything?</b> <button class="a" style="background:var(--warn)" onclick="wipe()">Yes, delete all data</button> <button class="a s" onclick="clr=false;draw()">Cancel</button>`:`<button class="a s" onclick="clr=true;draw()">Clear all data</button>`}
+<p class="msg">Data is saved in this browser only. Sample data is illustrative, not real council figures.</p></div>`}
+function addM(){const n=$("#mn").value.trim();if(!n||S.markets.length>=1)return;S.markets.push({id:uid(),name:n,rate:+$("#mr").value||0});S.expM=S.expM||{};if(+$("#me").value>0)S.expM[mon]=+$("#me").value;save();draw()}
+function setExp(v){S.expM=S.expM||{};S.expM[mon]=+v||0;save();draw()}
+let clr=false;
+function wipe(){S={markets:[],vendors:[],pays:[],bank:[],collectors:[],expM:{}};clr=false;sel="all";tab="Dashboard";try{localStorage.removeItem(KEY)}catch(e){}draw()}
+function addC(){const n=$("#cn").value.trim();S.collectors=S.collectors||[];if(!n||S.collectors.some(c=>c.name.toLowerCase()==n.toLowerCase()))return;S.collectors.push({id:uid(),name:n,exp:+$("#ce").value||0});save();draw()}
+function setC(id,v){const c=(S.collectors||[]).find(q=>q.id==id);if(c){c.exp=+v||0;save();draw()}}
+function delC(id){S.collectors=(S.collectors||[]).filter(c=>c.id!=id);save();draw()}
+function colls(){const s=stats(),L=S.collectors||[];
+return`<div class="card"><h2>Register a collector</h2><div class="f"><div><label>Collector name</label><input id="cn"></div><div><label>Expected amount per month (UGX)</label><input id="ce" type="number" style="width:210px"></div><button class="a" onclick="addC()">Save collector</button></div><p class="msg">The expected amount is the target this collector must collect and bank each month. Use the same name when recording receipts and deposits. You can change a target in the table below.</p></div>
+<div class="card"><h2>Collector performance for ${mon}</h2><div class="f"><div><label>Month</label><input type="month" value="${mon}" onchange="mon=this.value;draw()"></div></div><div class="sc"><table><tr><th>Collector</th><th>Expected (target)</th><th>Collected</th><th>% of target</th><th>Banked</th><th>Missing from bank</th><th>Status</th><th></th></tr>
+${L.map(c=>{const x=s.cols[c.name]||{rec:0,bank:0},p=c.exp?x.rec/c.exp*100:0,bad=(c.exp&&p<thr)||(x.rec&&x.bank/x.rec*100<thr);return`<tr><td>${E(c.name)}</td><td><input type="number" value="${c.exp}" style="width:130px" onchange="setC('${c.id}',this.value)"></td><td>${U(x.rec)}</td><td>${c.exp?p.toFixed(0)+'%':'-'}</td><td>${U(x.bank)}</td><td>${U(Math.max(0,x.rec-x.bank))}</td><td><span class="p ${bad?'hi':'lo'}">${bad?'Investigate':'On target'}</span></td><td><button class="a s" onclick="delC('${c.id}')">Remove</button></td></tr>`}).join("")||"<tr><td colspan=8>No collectors yet. Register one above.</td></tr>"}</table></div></div>`}
+function addV(){const n=$("#vn").value.trim();if(!n||!S.markets.length)return;S.vendors.push({id:uid(),name:n,stall:$("#vs").value,market:$("#vm").value});save();draw()}
+function addP(){const c=$("#pc").value.trim();if(!c||!$("#pv").value)return;S.pays.push({id:uid(),vendor:$("#pv").value,date:$("#pd").value,amt:+$("#pa").value||0,col:c,met:$("#pm").value});save();draw()}
+function addB(){const c=$("#bc").value.trim();if(!c)return;S.bank.push({id:uid(),col:c,date:$("#bd").value,amt:+$("#ba").value||0});save();draw()}
+function seed(){let x=7;const r=()=>(x=(x*9301+49297)%233280)/233280;
+S={markets:[],vendors:[],pays:[],bank:[]};
+[["Central Market",2000,60]].forEach(([n,rate,c])=>{const id=uid();S.markets.push({id,name:n,rate});
+for(let i=1;i<=c;i++)S.vendors.push({id:uid(),name:"Vendor "+n.split(" ")[0][0]+i,stall:"S"+i,market:id})});
+const cols=["Collector Anna","Collector Brian","Collector Carol"],paid={};
+S.vendors.forEach((v,i)=>{const m=mk(v.market),days=Math.round(26*(.55+r()*.45)),col=cols[i%3];
+for(let d=1;d<=days;d++)S.pays.push({id:uid(),vendor:v.id,date:mon+"-"+String(d).padStart(2,"0"),amt:m.rate,col,met:"Cash"});});
+cols.forEach((c,i)=>{const t=S.pays.filter(p=>p.col==c).reduce((a,p)=>a+p.amt,0);S.bank.push({id:uid(),col:c,date:mon+"-28",amt:Math.round(t*[.99,.72,.93][i])})});
+S.collectors=cols.map((c,i)=>({id:uid(),name:c,exp:1040000}));
+save();draw()}
+function draw(){$("#nav").innerHTML=TABS.map(t=>`<button class="${t==tab?'on':''}" onclick="tab='${t}';draw()">${t}</button>`).join("");
+$("#v").innerHTML={Dashboard:dash,Vendors:vendors,Collectors:colls,Payments:pays,Banking:bank,Settings:sett}[tab]()}
+draw();
+</script></body></html>
